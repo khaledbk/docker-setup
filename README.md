@@ -18,12 +18,15 @@ This project provides a fully automated local development environment for the Tu
 
 ## Project Structure
 
+```bash
 .
-├── .env # Environment variables
-├── docker-compose.yml # Docker service definitions
-├── Dockerfile # Base images (Postgres, Redis)
-├── init.sql # Postgres initialization script
-└── up.sh # Setup and restart script
+├── .env                 # Environment variables
+├── docker-compose.yml   # Docker service definitions
+├── Dockerfile           # Base images (Postgres, Redis)
+├── init.sql             # Postgres initialization script
+└── up.sh                # Setup and restart script
+
+```
 
 ---
 
