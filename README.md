@@ -1,35 +1,33 @@
-# 🧰 Tunisie Vacance Dev Environment
+# Tunisie Vacance Dev Environment
 
-This project provides a fully automated local development environment for the Tunisie Vacance platform, using Docker to orchestrate **Postgres** (with PostGIS) and **Redis**, along with a setup script to streamline initialization and health checks.
-
----
-
-## 🚀 Features
-
-- ✅ One-command setup via `up.sh`
-- 🐘 Postgres with PostGIS extension
-- 🔴 Redis with password authentication
-- 🔐 Secure environment variable loading
-- 🩺 Health checks for both services
-- 📄 Auto-initialization via `init.sql`
-- 🧹 Cleanup of Redis CLI credentials
+This project provides a fully automated local development environment for the Tunisie Vacance platform, using Docker to orchestrate Postgres (with PostGIS) and Redis, along with a setup script to streamline initialization and health checks.
 
 ---
 
-## 📁 Project Structure
+## Features
 
-```
+- One-command setup via `up.sh`
+- Postgres with PostGIS extension
+- Redis with password authentication
+- Secure environment variable loading
+- Health checks for both services
+- Auto-initialization via `init.sql`
+- Cleanup of Redis CLI credentials
+
+---
+
+## Project Structure
+
 .
-├── .env                   # Environment variables
-├── docker-compose.yml     # Docker service definitions
-├── Dockerfile             # Base images (Postgres, Redis)
-├── init.sql               # Postgres initialization script
-└── up.sh                  # Setup and restart script
-```
+├── .env # Environment variables
+├── docker-compose.yml # Docker service definitions
+├── Dockerfile # Base images (Postgres, Redis)
+├── init.sql # Postgres initialization script
+└── up.sh # Setup and restart script
 
 ---
 
-## ⚙️ Requirements
+## Requirements
 
 - Docker installed and running
 - Bash shell (`.sh` compatible)
@@ -37,10 +35,10 @@ This project provides a fully automated local development environment for the Tu
 
 ---
 
-## 🧪 Environment Variables (`.env`)
+## Environment Variables (.env)
 
-```
 # Postgres
+
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=password
 POSTGRES_DB=mydatabase
@@ -48,18 +46,18 @@ CUSTOM_HOST=10.0.0.19
 CUSTOM_PORT=5436
 
 # Redis
+
 REDIS_HOST=10.0.0.19
 REDIS_PORT=6380
 REDIS_PASSWORD=cahepassword
-```
 
 ---
 
-## 🧱 Database Initialization (`init.sql`)
+## Database Initialization (init.sql)
 
-```
 -- Create database if it doesn't exist
 DO
+
 $$
 BEGIN
    IF NOT EXISTS (
@@ -75,16 +73,19 @@ $$;
 -- Create user with specified password
 DO
 $$
+
 BEGIN
-   IF NOT EXISTS (
-      SELECT
-      FROM   pg_catalog.pg_roles
-      WHERE  rolname = 'admin'
-      ) THEN
-      CREATE USER admin WITH PASSWORD 'password';
-   END IF;
+IF NOT EXISTS (
+SELECT
+FROM pg_catalog.pg_roles
+WHERE rolname = 'admin'
+) THEN
+CREATE USER admin WITH PASSWORD 'password';
+END IF;
 END
-$$;
+
+$$
+;
 
 -- Connect to the database and set up PostGIS
 \c mydatabase admin
@@ -99,13 +100,11 @@ ALTER ROLE admin CREATEDB;
 
 -- Grant privileges on the database to the user
 GRANT ALL PRIVILEGES ON DATABASE mydatabase TO admin;
-```
 
----
+-------------------------------------------------------------------------------
 
-## 🐳 Docker Compose (`docker-compose.yml`)
+## Docker Compose (docker-compose.yml)
 
-```
 version: '3.8'
 
 services:
@@ -150,17 +149,14 @@ services:
 volumes:
   postgres_data:
   redis_data:
-```
 
----
+-------------------------------------------------------------------------------
 
-## 🛠️ Setup Script (`up.sh`)
+## Setup Script (up.sh)
 
 Run the following command to initialize and start your development environment:
 
-```
 bash up.sh
-```
 
 This script will:
 
@@ -171,32 +167,31 @@ This script will:
 5. Wait for Postgres and Redis to become healthy
 6. Display connection details
 
----
+-------------------------------------------------------------------------------
 
-## 🌐 Connection Info
+## Connection Info
 
-**Postgres**
+Postgres
+- Host: ${CUSTOM_HOST}
+- Port: ${CUSTOM_PORT}
+- Database: ${POSTGRES_DB}
+- User: ${POSTGRES_USER}
 
-- Host: `${CUSTOM_HOST}`
-- Port: `${CUSTOM_PORT}`
-- Database: `${POSTGRES_DB}`
-- User: `${POSTGRES_USER}`
+Redis
+- Host: ${REDIS_HOST}
+- Port: ${REDIS_PORT}
+- Password: ${REDIS_PASSWORD}
 
-**Redis**
+-------------------------------------------------------------------------------
 
-- Host: `${REDIS_HOST}`
-- Port: `${REDIS_PORT}`
-- Password: `${REDIS_PASSWORD}`
-
----
-
-## 🧹 Cleanup
+## Cleanup
 
 The script automatically removes the temporary Redis CLI auth file (`~/.rediscli.rc`) after setup.
 
----
+-------------------------------------------------------------------------------
 
-## 📣 Author
+## Author
 
-Created by **@khaledbk**  
+Created by @khaledbk
 Feel free to contribute or fork for your own dev stack!
+$$
