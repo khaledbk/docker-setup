@@ -42,23 +42,29 @@ This project provides a fully automated local development environment for the Tu
 
 # Postgres
 
+```bash
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=password
 POSTGRES_DB=mydatabase
 CUSTOM_HOST=10.0.0.19
 CUSTOM_PORT=5436
+```
 
 # Redis
 
+```bash
 REDIS_HOST=10.0.0.19
 REDIS_PORT=6380
 REDIS_PASSWORD=cahepassword
+```
 
 ---
 
 ## Database Initialization (init.sql)
 
 -- Create database if it doesn't exist
+
+```bash
 DO
 
 $$
@@ -72,8 +78,11 @@ BEGIN
    END IF;
 END
 $$;
+```
 
 -- Create user with specified password
+
+```bash
 DO
 $$
 
@@ -89,25 +98,33 @@ END
 
 $$
 ;
-
+```
 -- Connect to the database and set up PostGIS
+
+```bash
 \c mydatabase admin
 CREATE EXTENSION IF NOT EXISTS postgis;
-
+```
 -- Reindex database and refresh collation version to handle collation mismatch
+
+```bash
 REINDEX DATABASE mydatabase;
 ALTER DATABASE mydatabase REFRESH COLLATION VERSION;
-
+```
 -- Grant necessary permissions to the user
+
+```bash
 ALTER ROLE admin CREATEDB;
-
+```
 -- Grant privileges on the database to the user
-GRANT ALL PRIVILEGES ON DATABASE mydatabase TO admin;
 
+```bash
+GRANT ALL PRIVILEGES ON DATABASE mydatabase TO admin;
+```
 -------------------------------------------------------------------------------
 
 ## Docker Compose (docker-compose.yml)
-
+```bash
 version: '3.8'
 
 services:
@@ -152,7 +169,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
-
+```
 -------------------------------------------------------------------------------
 
 ## Setup Script (up.sh)
