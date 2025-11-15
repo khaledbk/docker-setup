@@ -4,59 +4,22 @@
 # author @khaledbk
 # up.sh
 #
-# This script automates the setup and restart of Docker containers for a 
-# development environment using Postgres and Redis. It performs the following:
-#
-# 1. Checks if Docker is installed; installs it if missing.
-# 2. Verifies Docker is running; attempts to start it if not.
-# 3. Loads environment variables from the .env file.
-# 4. Stops any running containers and restarts them with updated settings.
-# 5. Waits for Postgres and Redis to initialize and verifies their health.
-#    - Postgres is checked using a simple SQL query.
-#    - Redis is checked using the PING command with authentication.
-# 6. Displays connection details for both services.
-#
-# This script is useful for quickly refreshing the local dev stack with updated
-# configuration, especially when environment variables or container settings change.
+# Automates setup and restart of Docker containers for Postgres and Redis
+# without docker-compose.
 # ------------------------------------------------------------------------------
 
 # 🚨 Check if Docker is installed
 if ! command -v docker &> /dev/null; then
-    echo "🚫 Docker not found. Installing Docker..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
+    echo "🚫 Docker not found. Please install Docker first."
+    exit 1
 else
     echo "✅ Docker is installed."
 fi
 
 # 🚨 Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running."
-    read -p "👉 Do you want to try starting Docker now? (y/N): " start_docker
-
-    if [[ "$start_docker" =~ ^[Yy]$ ]]; then
-        echo "🚀 Attempting to start Docker..."
-
-        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            sudo systemctl start docker
-        elif [[ "$OSTYPE" == "darwin"* ]]; then
-            open --background -a Docker
-        else
-            echo "⚠️ Automatic start not supported on this OS. Please start Docker manually."
-            exit 1
-        fi
-
-        sleep 5
-        if ! docker info > /dev/null 2>&1; then
-            echo "❌ Docker still not running. Please start it manually and try again."
-            exit 1
-        else
-            echo "✅ Docker started successfully!"
-        fi
-    else
-        echo "🚫 Aborting. Please start Docker and rerun the script."
-        exit 1
-    fi
+    echo "❌ Docker is not running. Please open Docker and rerun this script."
+    exit 1
 fi
 
 # 📦 Load environment variables
@@ -67,83 +30,81 @@ else
     exit 1
 fi
 
-# 🔐 Create Redis CLI config file for secure auth
-echo "auth $REDIS_PASSWORD" > ~/.rediscli.rc
-chmod 600 ~/.rediscli.rc  # Restrict permissions
+# 🔁 Ensure Postgres container
+if [ "$(docker ps -aq -f name=postgres_container)" ]; then
+    echo "🔄 Postgres container exists."
+    docker start postgres_container || {
+        echo "🛑 Restarting Postgres..."
+        docker rm -f postgres_container
+        docker run -d \
+            --name postgres_container \
+            -e POSTGRES_USER=$POSTGRES_USER \
+            -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+            -e POSTGRES_DB=$POSTGRES_DB \
+            -p ${CUSTOM_PORT}:5432 \
+            -v postgres_data:/var/lib/postgresql/data \
+            -v $(pwd)/init.sql:/docker-entrypoint-initdb.d/init.sql \
+            postgis/postgis:latest
+    }
+else
+    echo "🚀 Creating Postgres container..."
+    docker run -d \
+        --name postgres_container \
+        -e POSTGRES_USER=$POSTGRES_USER \
+        -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+        -e POSTGRES_DB=$POSTGRES_DB \
+        -p ${CUSTOM_PORT}:5432 \
+        -v postgres_data:/var/lib/postgresql/data \
+        -v $(pwd)/init.sql:/docker-entrypoint-initdb.d/init.sql \
+        postgis/postgis:latest
+fi
 
-
-echo "🔁 Restarting containers..."
-
-echo "🛑 Stopping containers if running..."
-docker-compose down
-
-echo "🔄 Starting containers with new environment settings..."
-docker-compose up -d
-
-echo "✅ You are inside redis-container, type 'exit' to continue ...⬇️"
-docker exec -it redis_container sh
-redis-cli -a "$REDIS_PASSWORD" ping
-
-
+# 🔁 Ensure Redis container
+if [ "$(docker ps -aq -f name=redis_container)" ]; then
+    echo "🔄 Redis container exists."
+    docker start redis_container || {
+        echo "🛑 Restarting Redis..."
+        docker rm -f redis_container
+        docker run -d \
+            --name redis_container \
+            -e REDIS_PASSWORD=$REDIS_PASSWORD \
+            -p ${REDIS_PORT}:6379 \
+            -v redis_data:/data \
+            postgres-dev-redis:latest \
+            redis-server --requirepass $REDIS_PASSWORD
+    }
+else
+    echo "🚀 Creating Redis container..."
+    docker run -d \
+        --name redis_container \
+        -e REDIS_PASSWORD=$REDIS_PASSWORD \
+        -p ${REDIS_PORT}:6379 \
+        -v redis_data:/data \
+        postgres-dev-redis:latest \
+        redis-server --requirepass $REDIS_PASSWORD
+fi
 
 # 🕰️ Wait for Postgres
-echo "🕰️ Waiting for Postgres to finish initializing..."
-ready_pg=0
+echo "🕰️ Waiting for Postgres..."
 for i in {1..10}; do
-    docker exec postgres_container psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 1;" &> /dev/null
-    if [ $? -eq 0 ]; then
+    docker exec postgres_container psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" &> /dev/null && {
         echo "✅ Postgres is ready!"
-        ready_pg=1
         break
-    else
-        echo "⏳ Waiting for Postgres... ($i/10)"
-        sleep 2
-    fi
+    }
+    echo "⏳ Waiting for Postgres... ($i/10)"
+    sleep 2
 done
 
-if [ $ready_pg -eq 0 ]; then
-    echo "❌ Postgres still not ready after waiting."
-    exit 1
-fi
-
-# 🕰️ Wait for Redis (with password)
-echo "🕰️ Waiting for Redis to finish initializing..."
-ready_redis=0
+# 🕰️ Wait for Redis
+echo "🕰️ Waiting for Redis..."
 for i in {1..10}; do
-    docker exec redis_container redis-cli -a "$REDIS_PASSWORD" PING | grep PONG &> /dev/null
-    echo "⚠️ This is a standard security warning from redis-cli."
-    if [ $? -eq 0 ]; then
+    docker exec redis_container redis-cli -a "$REDIS_PASSWORD" PING | grep PONG &> /dev/null && {
         echo "✅ Redis is ready!"
-        ready_redis=1
         break
-    else
-        echo "⏳ Waiting for Redis... ($i/10)"
-        sleep 2
-    fi
+    }
+    echo "⏳ Waiting for Redis... ($i/10)"
+    sleep 2
 done
-
-if [ $ready_redis -eq 0 ]; then
-    echo "❌ Redis still not ready after waiting."
-    exit 1
-fi
-
-# 🧪 Final health checks
-echo "🧪 Checking Postgres health..."
-docker exec postgres_container psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT 1;" &> /dev/null
-if [ $? -ne 0 ]; then
-    echo "❌ Could not connect to Postgres."
-    exit 1
-else
-    echo "✅ Postgres is up and accepting connections."
-fi
-
-echo "🧪 Checking Redis health..."
-if [[ $(docker inspect --format='{{.State.Health.Status}}' redis_container) == "healthy" ]]; then
-  echo "✅ Redis is healthy"
-else
-  echo "❌ Redis is not healthy"
-fi
-
 
 # 🌐 Connection Details
 echo ""
@@ -158,7 +119,40 @@ echo "🌐 Redis Connection:"
 echo "Host: ${REDIS_HOST:-localhost}"
 echo "Port: ${REDIS_PORT:-6379}"
 echo "Password: ${REDIS_PASSWORD}"
-echo "Cleaning .rediscli.rc .."
 
-rm -f ~/.rediscli.rc
-echo "✅ Clean!   >  ~/.rediscli.rc"
+
+# 🕰️ Wait for Postgres (readiness + Docker health)
+echo "🕰️ Waiting for Postgres..."
+for i in {1..10}; do
+    docker exec postgres_container psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" &> /dev/null
+    if [ $? -eq 0 ]; then
+        status=$(docker inspect --format='{{.State.Health.Status}}' postgres_container)
+        if [[ "$status" == "healthy" ]]; then
+            echo "✅ Postgres is healthy (Docker status)"
+            break
+        else
+            echo "⏳ Postgres health: $status ($i/10)"
+        fi
+    else
+        echo "⏳ Waiting for Postgres... ($i/10)"
+    fi
+    sleep 3
+done
+
+# 🕰️ Wait for Redis (readiness + Docker health)
+echo "🕰️ Waiting for Redis..."
+for i in {1..10}; do
+    docker exec redis_container redis-cli -a "$REDIS_PASSWORD" PING | grep PONG &> /dev/null
+    if [ $? -eq 0 ]; then
+        status=$(docker inspect --format='{{.State.Health.Status}}' redis_container)
+        if [[ "$status" == "healthy" ]]; then
+            echo "✅ Redis is healthy (Docker status)"
+            break
+        else
+            echo "⏳ Redis health: $status ($i/10)"
+        fi
+    else
+        echo "⏳ Waiting for Redis... ($i/10)"
+    fi
+    sleep 3
+done
